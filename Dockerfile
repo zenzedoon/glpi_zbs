@@ -16,6 +16,7 @@ php-mysql \
 php-ldap \
 php-xmlrpc \
 php-imap \
+php-intl \
 curl \
 php-curl \
 php-gd \
