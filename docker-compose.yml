@@ -11,6 +11,8 @@ services:
     env_file:
       - ./mysql.env
     restart: always
+    networks:
+       - back
 
 #GLPI Container
   glpi:
@@ -26,3 +28,14 @@ services:
     environment: 
       - TIMEZONE=Afrique/Tunis
     restart: always
+    networks:
+       - back 
+       - front
+networks:
+   front:
+      driver: bridge
+   back:
+
+volumes:
+   mysql:
+   glpi: 
