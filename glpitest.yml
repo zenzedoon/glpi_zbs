@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glpi-frontend-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: glpi-frontend
+  template:
+    metadata:
+      labels:
+        app: glpi-frontend
+    spec:
+      containers:
+        - name: web-server
+          image: diouxx/glpi:latest
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: glpi-data
+              mountPath: /var/www/html/glpi
+        - name: installer
+          image: diouxx/glpi:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - "sleep 60 && php /var/www/html/install/install.php --host mysql-service --user glpi --pass glpi --name glpi --no_db_check --no_user"
+          volumeMounts:
+            - name: glpi-data
+              mountPath: /var/www/html/install
+      volumes:
+        - name: glpi-data
+          emptyDir: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: glpi-frontend-service
+spec:
+  selector:
+    app: glpi-frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: LoadBalancer
+
+---
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: glpi-backend-statefulset
+spec:
+  replicas: 3
+  serviceName: glpi-backend-service
+  selector:
+    matchLabels:
+      app: glpi-backend
+  template:
+    metadata:
+      labels:
+        app: glpi-backend
+    spec:
+      containers:
+        - name: mysql-server
+          image: mysql:5.7
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_DATABASE
+              value: glpi
+            - name: MYSQL_USER
+              value: glpi
+            - name: MYSQL_PASSWORD
+              value: glpi
+            - name: MYSQL_ROOT_PASSWORD
+              value: root
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: glpi-backend-service
+spec:
+  selector:
+    app: glpi-backend
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306

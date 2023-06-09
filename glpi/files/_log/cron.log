@@ -1,0 +1,40 @@
+2023-05-31 12:12:01 [@glpi]
+External #1: Launch PurgeLogs
+2023-05-31 12:12:01 [@glpi]
+External #2: Launch checkAllUpdates
+2023-05-31 12:12:01 [@glpi]
+External #3: Launch DomainsAlert
+2023-05-31 12:12:01 [@glpi]
+External #4: Launch cleanorphans
+2023-05-31 12:12:01 [@glpi]
+External #5: Launch pendingreason_autobump_autosolve
+2023-06-08 12:34:01 [@glpi]
+External #1: Launch Cleanoldagents
+2023-06-08 12:34:01 [@glpi]
+External #2: Launch pendingreason_autobump_autosolve
+2023-06-08 12:34:01 [@glpi]
+External #3: Launch checkAllUpdates
+2023-06-08 12:34:01 [@glpi]
+External #4: Launch DomainsAlert
+2023-06-08 12:34:01 [@glpi]
+External #5: Launch PurgeLogs
+2023-06-08 12:35:35 [@glpi]
+Internal #1: Launch contract
+2023-06-08 12:36:01 [@glpi]
+External #1: Launch cleanorphans
+2023-06-08 12:38:01 [@glpi]
+External #1: Nothing to Launch
+2023-06-08 12:40:01 [@glpi]
+External #1: Nothing to Launch
+2023-06-08 12:42:01 [@glpi]
+External #1: Nothing to Launch
+2023-06-08 12:44:01 [@glpi]
+External #1: Nothing to Launch
+2023-06-08 12:46:01 [@glpi]
+External #1: Nothing to Launch
+2023-06-08 12:48:01 [@glpi]
+External #1: Nothing to Launch
+2023-06-08 12:50:01 [@glpi]
+External #1: Nothing to Launch
+2023-06-08 12:52:01 [@glpi]
+External #1: Nothing to Launch
