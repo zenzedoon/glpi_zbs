@@ -4,27 +4,22 @@ metadata:
   name: data
 spec:
   accessModes:
-    - ReadWriteOnce  # Adjust the access mode based on your requirements
+    - ReadWriteOnce
   resources:
     requests:
       storage: 1Gi
-    # storageClassName: managed-csi
 
-# Start the section of the pod's glpi-backend-pod creation
 ---
 apiVersion: apps/v1
-kind: Deployment  
+kind: StatefulSet
 metadata:
-  name: glpi-backend-pod  # define the pod's name
+  name: glpi-backend-pod
 spec:
-  # serviceName: glpi-backend-service
-  replicas: 2  # define the pod's replica 
+  serviceName: glpi-backend-service
+  replicas: 2
   selector:
     matchLabels:
       app: glpi-backend-app
-  # persistentVolumeClaimRetentionPolicy:
-  #   whenDeleted: Delete # Retain
-  #   whenScaled: Delete
   template:
     metadata:
       labels:
@@ -32,11 +27,9 @@ spec:
     spec:
       nodeSelector:
         "kubernetes.io/os": linux
-      # terminationGracePeriodSeconds: 30
-      # hostname: mssqlinst
-      # securityContext:
-      #   fsGroup: 10001
-      
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        fsGroup: 10001
       containers:
       - name: glpi-backend-container
         image: mysql:5.7.23
@@ -59,28 +52,10 @@ spec:
         ports:
         - containerPort: 3306
           name: mysql
-        volumeMounts:
-        - name: data
-          mountPath: /var/opt/mssql
-      volumes:
-      - name: data
-        persistentVolumeClaim:
-          claimName: data
+        # volumeMounts:
+        # - name: data
+        #   mountPath: /var/lib/mysql
 
-
-  # volumeClaimTemplates:
-  #     - metadata:
-  #         name: data
-  #       spec:
-  #         accessModes:
-  #           - ReadWriteOnce  # Adjust the access mode based on your requirements
-  #         resources:
-  #           requests:
-  #             storage: 1Gi
-
-
-
-# End of the pod  creation
 ---
 apiVersion: v1
 kind: Service
@@ -89,13 +64,9 @@ metadata:
 spec:
   ports:
   - port: 3306
-    protocol: TCP
     targetPort: 3306
-  type: ClusterIP
   selector:
     app: glpi-backend-app
-
-
 
 ---
 apiVersion: apps/v1
@@ -107,11 +78,6 @@ spec:
   selector:
     matchLabels:
       app: glpi-front-app
-  strategy:
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 1
-  minReadySeconds: 5 
   template:
     metadata:
       labels:
@@ -121,7 +87,7 @@ spec:
         "kubernetes.io/os": linux
       containers:
       - name: glpi-front-container
-        image: acrzbe07.azurecr.io/glpi_zbe:v01  
+        image: acrzbe07.azurecr.io/glpi_zbe:v01
         ports:
         - containerPort: 80
         resources:
@@ -131,9 +97,10 @@ spec:
           limits:
             cpu: 1000m
             memory: 2Gi
-        env: # the name is the name of backend pod's port and the value is the name of the backend app , so this is like creating routing betwin front and back.
-        - name: mysql
-          value: "glpi-backend-app"
+        env:
+        - name: MYSQL_HOST
+          value: glpi-backend-service
+
 ---
 apiVersion: v1
 kind: Service

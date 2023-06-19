@@ -1,24 +1,39 @@
+##############################################
+###### Create needed Volumes Claims ##########
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: data
+  name: glpi-mysql-data
 spec:
   accessModes:
     - ReadWriteOnce  # Adjust the access mode based on your requirements
   resources:
     requests:
       storage: 1Gi
-    # storageClassName: managed-csi
 
-# Start the section of the pod's glpi-backend-pod creation
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: glpi-front-data
+spec:
+  accessModes:
+    - ReadWriteOnce  # Adjust the access mode based on your requirements
+  resources:
+    requests:
+      storage: 1Gi
+
+
+################################################
+########### Create GLPI Backend ################ 
 ---
 apiVersion: apps/v1
 kind: Deployment  
 metadata:
   name: glpi-backend-pod  # define the pod's name
 spec:
-  # serviceName: glpi-backend-service
-  replicas: 2  # define the pod's replica 
+  replicas: 1  # define the pod's replica 
   selector:
     matchLabels:
       app: glpi-backend-app
@@ -33,13 +48,13 @@ spec:
       nodeSelector:
         "kubernetes.io/os": linux
       # terminationGracePeriodSeconds: 30
-      # hostname: mssqlinst
+      # hostname: mssqlhost
       # securityContext:
       #   fsGroup: 10001
-      
       containers:
       - name: glpi-backend-container
         image: mysql:5.7.23
+        #command: [--ignore-db-dir=lost+found]
         env:
         - name: MYSQL_ROOT_PASSWORD
           value: rootpwd
@@ -49,6 +64,15 @@ spec:
           value: glpi_user
         - name: MYSQL_PASSWORD
           value: passwd
+        ## -------------------
+        # - name: MYSQL_MASTER_HOST
+        #   value: " 10.244.1.13"
+        # - name: MYSQL_MASTER_PORT
+        #   value: "3306"
+        # - name: MYSQL_MASTER_USER
+        #   value: root
+        # - name: MYSQL_MASTER_PASSWORD
+        #   value: passwd
         resources:
           requests:
             cpu: 500m
@@ -60,43 +84,14 @@ spec:
         - containerPort: 3306
           name: mysql
         volumeMounts:
-        - name: data
-          mountPath: /var/opt/mssql
+        - name: glpi-mysql-data
+          mountPath: /var/opt/mysql
       volumes:
-      - name: data
+      - name: glpi-mysql-data
         persistentVolumeClaim:
-          claimName: data
-
-
-  # volumeClaimTemplates:
-  #     - metadata:
-  #         name: data
-  #       spec:
-  #         accessModes:
-  #           - ReadWriteOnce  # Adjust the access mode based on your requirements
-  #         resources:
-  #           requests:
-  #             storage: 1Gi
-
-
-
-# End of the pod  creation
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: glpi-backend-service
-spec:
-  ports:
-  - port: 3306
-    protocol: TCP
-    targetPort: 3306
-  type: ClusterIP
-  selector:
-    app: glpi-backend-app
-
-
-
+          claimName: glpi-mysql-data
+##########################################################
+################### Create GLPI Front ####################
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -134,6 +129,15 @@ spec:
         env: # the name is the name of backend pod's port and the value is the name of the backend app , so this is like creating routing betwin front and back.
         - name: mysql
           value: "glpi-backend-app"
+        volumeMounts:
+        - name: glpi-front-data
+          mountPath: /var/www/html/
+      volumes:
+      - name: glpi-front-data
+        persistentVolumeClaim:
+          claimName: glpi-front-data
+##########################################################
+############### Create GLPI Service Front ################
 ---
 apiVersion: v1
 kind: Service
@@ -145,3 +149,19 @@ spec:
   - port: 80
   selector:
     app: glpi-front-app
+
+##########################################################
+############### Create GLPI Service Front ################
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: glpi-backend-service
+spec:
+  ports:
+  - port: 3306
+    protocol: TCP
+    targetPort: 3306
+  type: ClusterIP
+  selector:
+    app: glpi-backend-app

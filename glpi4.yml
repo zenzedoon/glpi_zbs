@@ -1,0 +1,153 @@
+######## MySQL StatefulSet ##########
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  serviceName: mysql
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      initContainers:
+      - name: init-mysql
+        image: mysql:5.7
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: rootpwd
+        volumeMounts:
+        - name: conf
+          mountPath: /mnt/conf.d
+      containers:
+      - name: mysql
+        image: mysql:5.7
+        env:
+        - name: MYSQL_ALLOW_EMPTY_PASSWORD
+          value: "1"
+        ports:
+        - name: mysql
+          containerPort: 3306
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+          subPath: mysql
+        - name: conf
+          mountPath: /etc/mysql/conf.d
+        resources:
+          requests:
+            cpu: 200m
+            memory: 0.5Gi
+          limits:
+            cpu: 500m
+            memory: 700Mi
+        livenessProbe:
+          exec:
+            command: ["mysqladmin", "ping"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command: ["mysql", "-h", "127.0.0.1", "-e", "SELECT 1"]
+          initialDelaySeconds: 5
+          periodSeconds: 2
+          timeoutSeconds: 1
+      volumes:
+      - name: conf
+        emptyDir: {}
+      - name: data
+        persistentVolumeClaim:
+          claimName: data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 2Gi
+---
+######### MYSQL Service ###########
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  ports:
+  - name: mysql
+    port: 3306
+  clusterIP: None
+  selector:
+    app: mysql
+---
+####### MySQL Read service ##########
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-read
+spec:
+  ports:
+  - name: mysql
+    port: 3306
+  selector:
+    app: mysql
+---
+################### Create GLPI Front ####################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glpi-front-pod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: glpi-front-app
+  template:
+    metadata:
+      labels:
+        app: glpi-front-app
+    spec:
+      containers:
+      - name: glpi-front-container
+        image: acrzbe07.azurecr.io/glpi_zbe:v01  
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 750m
+            memory: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        env:
+        - name: mysql
+          value: "mysql-read"
+        volumeMounts:
+        - name: glpi-front-data
+          mountPath: /var/www/html/
+      volumes:
+      - name: glpi-front-data
+        persistentVolumeClaim:
+          claimName: glpi-front-data
+---
+############### Create GLPI Service Front ################
+apiVersion: v1
+kind: Service
+metadata:
+  name: glpi-front-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: glpi-front-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      name: http
+
+############################################################

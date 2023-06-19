@@ -1,0 +1,227 @@
+
+######## MySQL StatefulSet ##########
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+      app.kubernetes.io/name: mysql
+  serviceName: mysql
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: mysql
+        app.kubernetes.io/name: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:5.7
+          env:
+            - name: MYSQL_ALLOW_EMPTY_PASSWORD
+              value: "1"
+            - name: MYSQL_ROOT_PASSWORD
+              value: rootpwd
+            - name: MYSQL_DATABASE
+              value: glpidb
+            - name: MYSQL_USER
+              value: glpi_user
+            - name: MYSQL_PASSWORD
+              value: passwd
+          command:
+            - "/bin/bash"
+            - "-c"
+            - |
+              set -ex
+              # Initialization tasks
+              # Generate mysql server-id from pod ordinal index.
+              [[ $HOSTNAME =~ -([0-9]+)$ ]] || exit 1
+              ordinal=${BASH_REMATCH[1]}
+              echo [mysqld] > /mnt/conf.d/server-id.cnf
+              # Add an offset to avoid reserved server-id=0 value.
+              echo server-id=$((100 + $ordinal)) >> /mnt/conf.d/server-id.cnf
+              # Copy appropriate conf.d files from config-map to emptyDir.
+              if [[ $ordinal -eq 0 ]]; then
+                cp /mnt/config-map/primary.cnf /mnt/conf.d/
+              else
+                cp /mnt/config-map/replica.cnf /mnt/conf.d/
+              fi
+              # Start MySQL service
+              exec mysqld --initialize-insecure --user=mysql --console
+          ports:
+            - name: mysql
+              containerPort: 3306
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+              subPath: mysql
+            - name: conf
+              mountPath: /etc/mysql/conf.d
+          resources:
+            requests:
+              cpu: 200m
+              memory: 0.5Gi
+            limits:
+              cpu: 400m
+              memory: 0.8Gi
+          livenessProbe:
+            exec:
+              command: ["mysqladmin", "ping"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              # Check we can execute queries over TCP (skip-networking is off).
+              command: ["mysql", "-h", "127.0.0.1", "-e", "SELECT 1"]
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 1
+      volumes:
+        - name: conf
+          emptyDir: {}
+        - name: config-map
+          configMap:
+            name: mysql
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 2Gi
+
+############################
+########### Config MAP ############
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+    app.kubernetes.io/name: mysql
+data:
+  primary.cnf: |
+    # Apply this config only on the primary.
+    [mysqld]
+    log-bin
+  replica.cnf: |
+    # Apply this config only on replicas.
+    [mysqld]
+    super-read-only
+
+######### MYSQL Service ###########
+# Headless service for stable DNS entries of StatefulSet members.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+    app.kubernetes.io/name: mysql
+spec:
+  ports:
+  - name: mysql
+    port: 3306
+  clusterIP: None
+  selector:
+    app: mysql
+
+####### MySQL Read service ##########
+# Client service for connecting to any MySQL instance for reads.
+# For writes, you must instead connect to the primary: mysql-0.mysql.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-read
+  labels:
+    app: mysql
+    app.kubernetes.io/name: mysql
+    readonly: "true"
+spec:
+  ports:
+  - name: mysql
+    port: 3306
+  selector:
+    app: mysql
+################### Create GLPI Front ####################
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glpi-front-pod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: glpi-front-app
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  minReadySeconds: 5 
+  template:
+    metadata:
+      labels:
+        app: glpi-front-app
+    spec:
+      nodeSelector:
+        "kubernetes.io/os": linux
+      containers:
+      - name: glpi-front-container
+        image: acrzbe07.azurecr.io/glpi_zbe:v01  
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 750m
+            memory: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        env: # the name is the name of backend pod's port and the value is the name of the backend app, so this is like creating routing between the front and back.
+        - name: mysql
+          value: "mysql-read"
+        volumeMounts:
+        - name: glpi-front-data
+          mountPath: /var/www/html/
+      volumes:
+      - name: glpi-front-data
+        persistentVolumeClaim:
+          claimName: glpi-front-data
+##########################################################
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: glpi-front-data
+spec:
+  accessModes:
+    - ReadWriteOnce  # Adjust the access mode based on your requirements
+  resources:
+    requests:
+      storage: 1Gi
+############### Create GLPI Service Front ################
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: glpi-front-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: glpi-front-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      name: http
+############################################################
