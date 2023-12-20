@@ -1,5 +1,5 @@
 #choose debian
-FROM debian:latest
+FROM debian:12
 
 MAINTAINER ZBS "ziedbensalem1986@gmail.com"
 
